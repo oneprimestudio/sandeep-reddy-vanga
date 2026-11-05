@@ -13,6 +13,7 @@ import PartnersSection from "@/components/Partnerssection";
 import BhadrakaliStory from "@/components/BhadrakaliStory";
 import PaperBurnSeam from "@/components/PaperBurnSeam";
 import RememberSection from "@/components/Remembersection";
+import BurnSeamSection from "@/components/Burnseamsection";
 
 export default function Home() {
   return (
@@ -26,6 +27,7 @@ export default function Home() {
           <FilmsSection2 />
           <AwardsSection />
           <PartnersSection />
+          <BurnSeamSection topColor="#111116" bottomColor="#ffffff" />
           <RememberSection />
         </main>
         <Footer />

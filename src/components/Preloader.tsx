@@ -4,11 +4,13 @@
  * Preloader: "Gate → Portrait"  (white paper, WebGL + one GSAP master timeline)
  *
  *  1. Intro    a hairline of ink draws up on white paper, opens into a 5:7 film frame
+ *              (sprocket holes scroll past the frame as the film "runs")
  *  2. Load     red emulsion rises inside the frame as REAL assets load (000 → 100)
- *  3. Gate     timeline pauses until loading is finished
+ *  3. Gate     timeline pauses until loading is finished, then holds a beat on 100
  *  4. Land     text rolls out, the frame travels + resizes onto the hero portrait
- *              ([data-hero-portrait]), the red burns away SLOWLY to reveal the real portrait
- *  5. Handoff  "preloader:land" fires → hero intro starts → the white paper dissolves away
+ *              ([data-hero-portrait], re-measured every frame while travelling),
+ *              the red BURNS away (char → ember rim → glow → sparks) to reveal the real portrait
+ *  5. Handoff  "preloader:land" fires → hero intro starts → the white paper burns away too
  *
  * Hero protocol (matches HeroSection):
  *   #preloader                        root element
@@ -28,6 +30,14 @@ const SESSION_KEY = "fma-preloader-seen";
 
 const LINES = ["Rolling camera", "Setting the light", "Opening the archive", "Action"];
 const pad = (n: number, l = 2) => String(n).padStart(l, "0");
+
+/** raw sRGB vec3 (NOT THREE.Color, which converts to linear and darkens the red vs CSS) */
+const rgb = (hex: string) =>
+  new THREE.Vector3(
+    parseInt(hex.slice(1, 3), 16) / 255,
+    parseInt(hex.slice(3, 5), 16) / 255,
+    parseInt(hex.slice(5, 7), 16) / 255
+  );
 
 /** run a callback once the preloader has fully finished (or immediately if it already has) */
 export function whenPreloaded(cb: () => void) {
@@ -62,7 +72,7 @@ uniform float uWidth;     // 0..1  slit opens into the 5:7 frame
 uniform float uProg;      // 0..1  loading progress (fills the frame)
 uniform float uLand;      // 0..1  frame travels + resizes onto the portrait
 uniform float uReveal;    // 0..1  frame contents burn away (shows the real portrait)
-uniform float uClear;     // 0..1  white paper dissolves away
+uniform float uClear;     // 0..1  white paper burns away
 uniform vec2  uToCenter;  // portrait centre (screen-height units)
 uniform vec2  uToHalf;    // portrait half-size (screen-height units)
 uniform vec3  uInk;
@@ -96,6 +106,31 @@ float box(vec2 p, vec2 b) {
   return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
 }
 
+/**
+ * Burning layer. n = noise field, t = burn threshold (alive where n > t), w = edge width.
+ * Returns PREMULTIPLIED colour:
+ *   alive side : base → black char → hot orange rim
+ *   hole side  : a soft red→amber ember halo that fades into transparency
+ * glow = proximity to the burn front (0..1), used for sparks.
+ */
+vec4 burnLayer(vec3 base, float n, float t, float w, out float glow) {
+  float e = (n - t) / w;
+  float alive = smoothstep(0.0, 0.05, e);
+
+  float charB = 1.0 - smoothstep(0.1, 1.1, e);
+  float rim   = 1.0 - smoothstep(0.0, 0.3, e);
+  vec3 c = mix(base, vec3(0.06, 0.015, 0.01), charB * 0.92);
+  c = mix(c, vec3(1.0, 0.5, 0.14), rim);
+  c = mix(c, vec3(1.0, 0.88, 0.55), rim * rim * 0.7);
+
+  float halo = exp(min(e, 0.0) * 1.8);
+  vec3 hc = mix(vec3(0.85, 0.12, 0.06), vec3(1.0, 0.7, 0.3), halo * halo);
+  float ha = halo * 0.8 * (1.0 - alive);
+
+  glow = exp(-abs(e) * 1.8);
+  return vec4(c * alive + hc * ha, alive + ha);
+}
+
 void main() {
   float asp = uRes.x / uRes.y;
   vec2 p = (vUv - 0.5) * vec2(asp, 1.0);   // centred, screen height = 1, y up
@@ -108,6 +143,8 @@ void main() {
 
   // frame: 5:7 slit while loading → portrait rect when landed
   float hh0 = mix(0.15, 0.2, uProg) * uIntro;
+  hh0 *= 1.0 + 0.006 * sin(uTime * 2.2) * uWidth * calm;   // the frame "breathes" at the gate
+  hh0 = min(hh0, asp * 0.4);                                // never wider than the phone screen
   vec2 half0 = vec2(hh0 * (5.0 / 7.0) * mix(0.012, 1.0, uWidth), hh0);
   vec2 hs = mix(half0, uToHalf, uLand);
   vec2 c = mix(vec2(0.0), uToCenter, uLand);
@@ -122,6 +159,21 @@ void main() {
   paper *= 1.0 - 0.10 * exp(-outside * 16.0) * uIntro * (1.0 - 0.5 * uLand);   // soft shadow off the frame
   paper *= mix(0.97, 1.0, smoothstep(1.2, 0.3, length(vUv - 0.5) * 1.4));       // faint vignette
 
+  // sprocket holes run past the frame while it loads
+  {
+    float holeX = hs.x + 0.034;
+    float cell = 0.036;
+    float yy = q.y - uProg * 0.45 - uTime * 0.012;
+    float fy = mod(yy, cell) - cell * 0.5;
+    float hd = box(vec2(abs(q.x) - holeX, fy), vec2(0.0042, 0.0082)) - 0.002;
+    float holes = (1.0 - smoothstep(-aa, aa, hd)) * uWidth * (1.0 - uLand) * (1.0 - smoothstep(hs.y - 0.01, hs.y + 0.03, abs(q.y)));
+    paper = mix(paper, uInk * 1.1, holes * 0.85);
+    // hairline rails
+    float rail = 1.0 - smoothstep(0.0, aa * 1.2, abs(abs(q.x) - (hs.x + 0.014)));
+    rail *= uWidth * (1.0 - uLand) * (1.0 - smoothstep(hs.y - 0.01, hs.y + 0.03, abs(q.y)));
+    paper = mix(paper, uInk, rail * 0.18);
+  }
+
   /* ── inside the frame: ink film + rising red emulsion ── */
   float hy = max(hs.y, 0.05);
   vec2 fp = q / hy;                                            // frame-local coords
@@ -133,6 +185,7 @@ void main() {
   vec3 film = uInk * (0.9 + 0.2 * fbm(fp * 4.0 + uTime * 0.15));
   vec3 emulsion = uRed * (0.88 + 0.22 * fbm(fp * 3.0 + uTime * 0.1));
   film = mix(film, emulsion, fill);
+  // meniscus glow at the red's surface
   film += vec3(0.9, 0.5, 0.4) * exp(-abs(y01 - fillY) * 70.0) * 0.25 * (1.0 - uReveal);
 
   film *= 1.0 - 0.22 * smoothstep(-0.05, 0.0, d);                                     // inner vignette
@@ -140,29 +193,37 @@ void main() {
   film += step(0.9975, hash(vec2(floor(q.x * 260.0), floor(uTime * 12.0)))) * 0.10;   // scratches
   film += smoothstep(0.995, 1.0, noise(fp * 60.0 + floor(uTime * 12.0) * 17.0)) * 0.25; // dust
 
-  // frame contents burn away to reveal the real portrait underneath
-  // (softer, wider burn edge so the slow reveal looks organic, not harsh)
+  // grain before burning so the char keeps texture
+  float gr = hash(gl_FragCoord.xy + fract(uTime) * 91.7) - 0.5;
+  paper += gr * 0.04;
+  film  += gr * 0.07;
+
+  /* ── burns ── */
+  float gF, gP;
+
+  // frame contents burn away → real portrait underneath
   float n2 = fbm(fp * 2.5 + 7.0);
-  float t = mix(-0.14, 1.14, uReveal);
-  float aFrame = smoothstep(t, t + 0.09, n2);
-  float rim = (1.0 - smoothstep(0.0, 0.09, n2 - t)) * step(0.001, uReveal) * step(t, n2);
-  film = mix(film, vec3(1.0, 0.82, 0.7), rim * 0.8);
+  float tF = mix(-0.14, 1.14, uReveal);
+  vec4 F = burnLayer(clamp(film, 0.0, 1.0), n2, tF, 0.09, gF);
 
-  /* ── paper dissolves into the page ── */
+  // paper burns away → the page
   float n3 = fbm(p * 3.2 + 11.0);
-  float t2 = mix(-0.14, 1.14, uClear);
-  float aPaper = smoothstep(t2, t2 + 0.1, n3);
-  float rim2 = (1.0 - smoothstep(0.0, 0.1, n3 - t2)) * step(0.001, uClear) * step(t2, n3);
-  paper = mix(paper, vec3(0.96, 0.5, 0.38), rim2 * 0.55);
+  float tP = mix(-0.14, 1.14, uClear);
+  vec4 P = burnLayer(clamp(paper, 0.0, 1.0), n3, tP, 0.1, gP);
 
-  vec3 col = mix(paper, film, m);
-  float alpha = mix(aPaper, aFrame, m);
+  vec4 L = mix(P, F, m);
 
-  // film grain (subtle on paper, stronger in the frame)
-  col += (hash(gl_FragCoord.xy + fract(uTime) * 91.7) - 0.5) * mix(0.04, 0.07, m);
-  col = clamp(col, 0.0, 1.0);
+  /* ── sparks drifting up off the burn fronts ── */
+  float gs = mix(gP * step(0.001, uClear) * step(uClear, 0.999),
+                 gF * step(0.001, uReveal) * step(uReveal, 0.999), m);
+  vec2 sc = floor((p + vec2(0.0, -uTime * 0.09)) * 150.0);
+  float sh = hash(sc + floor(uTime * 9.0));
+  float spk = step(0.985, sh) * smoothstep(0.5, 1.0, gs);
+  vec3 sparkCol = mix(vec3(1.0, 0.45, 0.12), vec3(1.0, 0.85, 0.5), hash(sc));
+  L.rgb += sparkCol * spk;
+  L.a = clamp(L.a + spk, 0.0, 1.0);
 
-  gl_FragColor = vec4(col * alpha, alpha);   // premultiplied
+  gl_FragColor = L;   // premultiplied
 }
 `;
 
@@ -180,7 +241,7 @@ type Props = {
 
 export default function Preloader({
   assets = [],
-  minDuration = 1.2,
+  minDuration = 1.6,
   oncePerSession = false,
   onComplete,
 }: Props) {
@@ -307,8 +368,8 @@ export default function Preloader({
         uClear: { value: 0 },
         uToCenter: { value: new THREE.Vector2(0, 0) },
         uToHalf: { value: new THREE.Vector2(0.15, 0.2) },
-        uInk: { value: new THREE.Color(INK) },
-        uRed: { value: new THREE.Color(RED) },
+        uInk: { value: rgb(INK) },
+        uRed: { value: rgb(RED) },
       };
 
       const scene = new THREE.Scene();
@@ -353,8 +414,7 @@ export default function Preloader({
         renderer?.dispose();
       };
 
-      /** where the frame has to land: the hero portrait's exact rect (measured at landing time,
-          after the hero's parallax has settled at scroll 0) */
+      /** where the frame has to land: the hero portrait's exact rect */
       const measureTarget = () => {
         const el = document.querySelector<HTMLElement>("[data-hero-portrait]");
         const vw = window.innerWidth;
@@ -401,7 +461,7 @@ export default function Preloader({
       else bump();
       if (document.readyState === "complete") bump();
       else window.addEventListener("load", bump, { once: true });
-      const safety = window.setTimeout(finish, 7500); // safety fallback ensures preloader never hangs if an asset is blocked
+      const safety = window.setTimeout(finish, 9000); // safety fallback ensures preloader never hangs if an asset is blocked
 
       /* ── caption roll (masked, same language as the rest of the site) ── */
       let lineIdx = 0;
@@ -428,6 +488,7 @@ export default function Preloader({
       gsap.set(items, { yPercent: 110 });
       gsap.set(textLayer, { autoAlpha: 1 });
 
+      const HOLD = 0.35; // beat held on 100 before the frame lands
       let ready = false;
       let atGate = false;
       let exiting = false;
@@ -446,10 +507,10 @@ export default function Preloader({
         // 2) GATE: hold until loading is complete
         .addPause(2.4, () => {
           atGate = true;
-          if (ready) gsap.delayedCall(0, go);
+          if (ready) gsap.delayedCall(HOLD, go);
         })
         .addLabel("outro")
-        // 3) text rolls out (slightly softer)
+        // 3) text rolls out
         .to(
           items,
           { yPercent: -110, duration: 0.8, ease: "expo.in", stagger: 0.035 },
@@ -457,15 +518,15 @@ export default function Preloader({
         );
 
       if (renderer) {
-        // 4) LAND: frame travels onto the hero portrait (1.2s)
+        // 4) LAND: frame travels onto the hero portrait
         tl.call(measureTarget, [], "outro+=0.4")
-          .to(gl, { land: 1, duration: 1.2, ease: "power3.inOut" }, "outro+=0.45")
-          // REVEAL: red burn → real portrait (1.4s)
-          .to(gl, { reveal: 1, duration: 1.4, ease: "power1.inOut" }, "outro+=1.2")
-          // 5) HANDOFF: hero starts once burn is underway, paper dissolves
-          .call(announceLand, [], "outro+=2.0")
-          .to(gl, { clear: 1, duration: 1.2, ease: "power2.inOut" }, "outro+=2.1")
-          .call(finish, [], "outro+=3.35");
+          .to(gl, { land: 1, duration: 1.3, ease: "power3.inOut" }, "outro+=0.45")
+          // REVEAL: red burns away → real portrait (slow, with ember glow)
+          .to(gl, { reveal: 1, duration: 1.9, ease: "power1.inOut" }, "outro+=1.15")
+          // 5) HANDOFF: hero starts once burn is underway, paper burns away
+          .call(announceLand, [], "outro+=2.1")
+          .to(gl, { clear: 1, duration: 1.5, ease: "power2.inOut" }, "outro+=2.2")
+          .call(finish, [], "outro+=3.75");
       } else {
         tl.call(announceLand, [], "outro+=0.5")
           .to(root, { autoAlpha: 0, duration: 0.8, ease: "power2.inOut" }, "outro+=0.5")
@@ -483,7 +544,7 @@ export default function Preloader({
           elapsed += dt;
 
           const target = Math.min(prog.real, elapsed / minDuration);
-          prog.disp += (target - prog.disp) * Math.min(1, dt * 5);
+          prog.disp += (target - prog.disp) * Math.min(1, dt * 4.5);
           if (target >= 1 && prog.disp > 0.997) prog.disp = 1;
 
           const pct = Math.round(prog.disp * 100);
@@ -502,10 +563,13 @@ export default function Preloader({
 
           if (!ready && prog.disp >= 1) {
             ready = true;
-            if (atGate) gsap.delayedCall(0, go);
+            if (atGate) gsap.delayedCall(HOLD, go);
           }
 
           if (renderer) {
+            // while travelling, keep tracking the portrait so it lands pixel-perfect
+            if (gl.land > 0 && gl.land < 1) measureTarget();
+
             uniforms.uTime.value = elapsed;
             uniforms.uIntro.value = gl.intro;
             uniforms.uWidth.value = gl.width;
