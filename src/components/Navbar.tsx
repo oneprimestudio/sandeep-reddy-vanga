@@ -85,32 +85,31 @@ export default function Navbar() {
           </div>
 
           {/* Mobile Navbar: clean and refined */}
-          <div className="flex md:hidden items-center justify-between vanga-label">
+          {/* Mobile Navbar: name stacked left, links stacked right */}
+          <div className="flex md:hidden items-start justify-between">
             <a
               href="/"
-              className="text-[#d92626] font-medium text-[13px] tracking-tight"
+              className="text-ink font-medium text-[12px] leading-[1.05] tracking-tight"
             >
-              Sandeep Reddy Vanga
+              <span className="block">Sandeep</span>
+              <span className="block">Reddy</span>
+              <span className="block">Vanga</span>
             </a>
 
-            <div className="flex items-center gap-4 text-[12px]">
+            <nav className="flex flex-col items-end text-[13px] leading-[1.15] tracking-tight text-ink">
               <a
                 href="/#about"
                 onClick={(e) => {
                   e.preventDefault();
                   setAboutOpen(true);
                 }}
-                className="text-ink-muted hover:text-ink cursor-pointer"
+                className="cursor-pointer"
               >
                 About
               </a>
-              <a href="/films" className="text-ink-muted hover:text-ink">
-                Films
-              </a>
-              <a href="/#upcoming" className="text-ink-muted hover:text-ink">
-                Upcoming
-              </a>
-            </div>
+              <a href="/films">Films</a>
+              <a href="/#upcoming">Upcoming</a>
+            </nav>
           </div>
         </div>
       </header>

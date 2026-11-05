@@ -35,7 +35,7 @@ function AwardRow({
   onOpen,
 }: {
   item: Award;
-  onEnter: (a: Award) => void;
+  onEnter: (a: Award, e?: React.PointerEvent | React.FocusEvent) => void;
   onOpen: (a: Award) => void;
 }) {
   const won = item.result === "won";
@@ -44,8 +44,8 @@ function AwardRow({
       role="button"
       tabIndex={0}
       aria-label={`${item.award}, ${item.category}, ${item.film} (${item.year}): open details`}
-      onPointerEnter={() => onEnter(item)}
-      onFocus={() => onEnter(item)}
+      onPointerEnter={(e) => onEnter(item, e)}
+      onFocus={(e) => onEnter(item, e)}
       onClick={() => onOpen(item)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -57,7 +57,7 @@ function AwardRow({
     >
       <span
         data-rule
-        className="absolute inset-x-3 top-0 z-10 h-px origin-left bg-black/15"
+        className="absolute inset-x-3 top-0 z-10 h-px origin-left bg-black/15 will-change-transform"
       />
       {/* THE BLACK: wipes up from the bottom edge */}
       <span
@@ -113,15 +113,21 @@ export default function AwardsSection() {
   const poster = useRef<PosterState>({ x: 0, y: 0, active: false, index: 0 });
 
   const onMove = (e: React.PointerEvent) => {
+    if (!poster.current.active) return;
     const r = rootRef.current?.getBoundingClientRect();
     if (!r) return;
     poster.current.x = e.clientX - r.left;
     poster.current.y = e.clientY - r.top;
   };
-  const onEnter = (a: Award) => {
+  const onEnter = (a: Award, e?: React.PointerEvent | React.FocusEvent) => {
     if (lockedRef.current) return;
     poster.current.index = posterIndex(a.film);
     poster.current.active = true;
+    if (e && "clientX" in e && rootRef.current) {
+      const r = rootRef.current.getBoundingClientRect();
+      poster.current.x = e.clientX - r.left;
+      poster.current.y = e.clientY - r.top;
+    }
   };
   const onLeave = () => {
     poster.current.active = false;

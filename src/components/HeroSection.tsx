@@ -128,19 +128,20 @@ export default function HeroSection() {
       <div aria-hidden className="hidden md:block md:row-start-1" />
 
       {/* Row 2: MAIN */}
-      <div className="px-4 md:px-8 pt-24 md:pt-0 md:row-start-2">
+      <div className="px-4 md:px-8 pt-28 md:pt-0 md:row-start-2">
         <div className="mx-auto w-full max-w-[1720px]">
           {/*
-            MOBILE  : 3 columns [credits | portrait | "To The Big Screen"], same composition as desktop
+            MOBILE  : symmetric 3 columns [credits 4rem | portrait (flex) | big-screen 4rem]
+                      so the portrait is always dead-centre
             DESKTOP : the original 12-column Figma grid (unchanged)
           */}
-          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] md:grid-cols-12 gap-x-2 md:gap-x-3 gap-y-5 md:gap-y-0 items-start">
-            {/* MICRO STRIP (mobile): 2 compact rows above the portrait */}
+          <div className="grid grid-cols-[4rem_minmax(0,1fr)_4rem] md:grid-cols-12 gap-x-2 md:gap-x-3 gap-y-6 md:gap-y-0 items-start">
+            {/* MICRO STRIP (mobile): 2 clean rows, left / centre / right aligned to the portrait edges */}
             <div
               key={`mstrip-${k}`}
-              className="md:hidden col-span-3 row-start-1 grid grid-cols-3 gap-y-[6px] text-[clamp(8.5px,2.7vw,10px)] uppercase leading-[1.1] text-gray-600"
+              className="md:hidden col-span-3 row-start-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-2 gap-y-[7px] text-[clamp(8.5px,2.5vw,10px)] uppercase leading-[1.1] tracking-[0.01em] text-gray-600 whitespace-nowrap tabular-nums"
             >
-              <div>
+              <div className="min-w-0">
                 <Text variant="slideUp" delay={0.1}>
                   <div className="flex items-center gap-[6px]">
                     <Rec />
@@ -152,12 +153,12 @@ export default function HeroSection() {
                   <span className="block text-center">Scene 01</span>
                 </Text>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Text variant="slideUp" delay={0.18}>
                   <span className="block text-right">Take 01</span>
                 </Text>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Text variant="slideUp" delay={0.22}>
                   <span className="block">17.97° N 79.59° E</span>
                 </Text>
@@ -169,7 +170,7 @@ export default function HeroSection() {
                   </span>
                 </Text>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Text variant="slideUp" delay={0.3}>
                   <span className="block text-right">
                     <LocalTime />
@@ -227,7 +228,7 @@ export default function HeroSection() {
             {/* Credits: top of "Director" sits on the portrait's center line (Figma) */}
             <div className="col-start-1 row-start-2 self-stretch flex items-center md:col-span-2 md:col-start-2 xl:col-start-3 md:row-start-2">
               <div className="w-full h-0">
-                <div className="flex flex-col text-[9px] md:text-[20px] xl:text-[12px] tracking-tight text-gray-700 uppercase leading-tight font-medium">
+                <div className="flex flex-col whitespace-nowrap text-[9px] md:text-[20px] xl:text-[12px] tracking-tight text-gray-700 uppercase leading-[1.3] md:leading-tight font-medium">
                   <span>Director</span>
                   <span>Screen Play</span>
                   <span>Editor</span>
@@ -264,16 +265,16 @@ export default function HeroSection() {
                 </div>
 
                 {/* name + tagline: same spot as desktop (center line, slightly low) */}
-                <div className="absolute inset-x-0 top-[57%] mt-[5px] -translate-y-1/2 px-3 md:px-5 text-center text-white pointer-events-none z-10">
+                <div className="absolute inset-x-0 top-[57%] mt-[5px] -translate-y-1/2 px-2 md:px-5 text-center text-white pointer-events-none z-10">
                   <h3
                     data-hero-name
-                    className="text-[clamp(11px,3.5vw,16px)] md:text-[clamp(20px,1.4vw,30px)] uppercase leading-tight font-medium tracking-[-0.03em]"
+                    className="text-[clamp(10px,3.1vw,14px)] md:text-[clamp(20px,1.4vw,30px)] uppercase leading-[1.1] md:leading-tight font-medium tracking-[-0.03em] text-balance"
                   >
                     Sandeep Reddy Vanga
                   </h3>
                   <p
                     data-hero-name
-                    className="mt-1 md:mt-2 text-[9px] md:text-[clamp(11px,0.95vw,14px)] font-normal tracking-[-0.01em] text-white/90"
+                    className="mt-1 md:mt-2 text-[9px] md:text-[clamp(11px,0.95vw,14px)] font-normal leading-[1.25] tracking-[-0.01em] text-white/90 text-balance"
                   >
                     Not every STORY seeks approval
                   </p>
@@ -284,8 +285,9 @@ export default function HeroSection() {
             {/* To The Big Screen: same center line as "Director" */}
             <div className="col-start-3 row-start-2 self-stretch flex items-center md:col-span-3 md:col-start-10 xl:col-start-8 md:row-start-2">
               <div className="w-full h-0">
-                <span className="block max-w-[3.4rem] md:max-w-none text-right text-[9px] md:text-[20px] xl:text-[12px] uppercase font-medium leading-tight text-ink">
-                  To The Big Screen
+                <span className="block text-right whitespace-nowrap md:whitespace-normal text-[9px] md:text-[20px] xl:text-[12px] uppercase font-medium leading-[1.3] md:leading-tight text-ink">
+                  To The
+                  <br className="md:hidden" /> Big Screen
                 </span>
               </div>
             </div>
@@ -296,7 +298,7 @@ export default function HeroSection() {
               className="col-span-3 col-start-1 row-start-3 mt-1 md:col-span-6 md:col-start-4 md:mt-4 text-center"
             >
               <Text variant="slideUp" delay={0.2}>
-                <p className="font-normal text-ink text-balance text-[clamp(17px,5vw,22px)] md:text-[30px] xl:text-[clamp(16px,1.2vw,24px)] leading-[1.1] md:leading-[1.012] tracking-[-0.05em]">
+                <p className="mx-auto max-w-[32ch] md:max-w-none font-normal text-ink text-balance text-[clamp(17px,5vw,21px)] md:text-[30px] xl:text-[clamp(16px,1.2vw,24px)] leading-[1.14] md:leading-[1.012] tracking-[-0.045em] md:tracking-[-0.05em]">
                   <span className="text-[#d92626] font-medium">Sandeep Reddy Vanga</span>{" "}
                   challenges conventions, breaks cinematic boundaries and
                   transforms raw human emotions into unapologetic expressions of
@@ -309,9 +311,9 @@ export default function HeroSection() {
       </div>
 
       {/* Row 3: SCROLL / NARRATION / SPIRIT, in flow, pinned to the bottom */}
-      <div className="px-4 md:px-8 mt-6 pb-8 md:mt-0 md:row-start-3 md:self-end">
+      <div className="px-4 md:px-8 mt-8 pb-[calc(2rem+env(safe-area-inset-bottom))] md:mt-0 md:pb-8 md:row-start-3 md:self-end">
         <div className="mx-auto w-full max-w-[1720px]">
-          <div className="grid grid-cols-12 gap-x-2 md:gap-x-3 gap-y-5 items-end">
+          <div className="grid grid-cols-12 gap-x-2 md:gap-x-3 gap-y-6 items-end">
             {/* Narration: mobile = full width on top, desktop = cols 4-9 (same span as the bio) */}
             <div
               key={`nar-${k}`}
@@ -327,7 +329,7 @@ export default function HeroSection() {
             {/* Scroll cue: mobile = bottom-left, desktop = cols 1-3 */}
             <div
               key={`scroll-${k}`}
-              className="order-2 md:order-none col-span-4 md:col-span-3 md:row-start-1 text-[10px] md:text-[11px] uppercase leading-[1.1] text-gray-600"
+              className="order-2 md:order-none col-span-3 md:col-span-3 md:row-start-1 pb-1 md:pb-0 text-[10px] md:text-[11px] uppercase leading-[1.1] text-gray-600 whitespace-nowrap"
             >
               <Text variant="slideUp" delay={0.25}>
                 <div>
@@ -336,17 +338,18 @@ export default function HeroSection() {
               </Text>
             </div>
 
-            {/* Spirit: mobile = bottom-right (8 cols), desktop = cols 10-12 (nested 3-col grid) */}
-            <div className="order-3 md:order-none col-span-8 md:col-span-3 md:col-start-10 md:row-start-1 grid grid-cols-3 gap-x-2 md:gap-x-3 items-end">
+            {/* Spirit: mobile = compact row [label | poster | note] aligned to the bottom-right,
+                desktop = cols 10-12 (nested 3-col grid) */}
+            <div className="order-3 md:order-none col-span-9 md:col-span-3 md:col-start-10 md:row-start-1 flex md:grid md:grid-cols-3 justify-end items-end gap-x-3 md:gap-x-3">
               <button
                 type="button"
                 onClick={openSpirit}
-                className="text-right text-[14px] md:text-[clamp(14px,1.4vw,20px)] font-normal leading-none text-ink pb-1 cursor-pointer transition-opacity hover:opacity-70"
+                className="shrink-0 text-right text-[14px] md:text-[clamp(14px,1.4vw,20px)] font-normal leading-none text-ink pb-1 cursor-pointer transition-opacity hover:opacity-70"
               >
                 Spirit
               </button>
 
-              <div>
+              <div className="w-[3.5rem] shrink-0 md:w-auto">
                 <button
                   type="button"
                   onClick={openSpirit}
@@ -370,7 +373,7 @@ export default function HeroSection() {
                 </button>
               </div>
 
-              <p className="text-[9px] md:text-[11px] leading-[1.2] text-ink pb-5">
+              <p className="max-w-[6.5rem] md:max-w-none text-[9px] md:text-[11px] leading-[1.25] md:leading-[1.2] text-ink pb-5">
                 Directed by Sandeep Reddy Vanga. An upcoming film.
               </p>
             </div>

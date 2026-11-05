@@ -163,7 +163,7 @@ export default function AwardsPoster({ srcs, state }: Props) {
         W = wrap.clientWidth;
         H = wrap.clientHeight;
         if (!W || !H) return;
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
         renderer.setSize(W, H, false);
         camera.left = -W / 2;
         camera.right = W / 2;
@@ -205,6 +205,15 @@ export default function AwardsPoster({ srcs, state }: Props) {
             duration: reduced ? 0 : state.active ? 1.1 : 0.55,
             ease: state.active ? MASK_EASE : "expo.inOut",
           });
+        }
+
+        // If inactive and mask has faded out, skip expensive render pass completely during scroll
+        if (!state.active && u.uMask.value <= 0.002) {
+          if (mesh.visible) {
+            mesh.visible = false;
+            renderer.clear();
+          }
+          return;
         }
 
         // swap the poster when the hovered row changes

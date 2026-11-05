@@ -11,6 +11,7 @@ import Preloader from "@/components/Preloader";
 import AwardsSection from "@/components/AwardsSection";
 import PartnersSection from "@/components/Partnerssection";
 import BhadrakaliStory from "@/components/BhadrakaliStory";
+import PaperBurnSeam from "@/components/PaperBurnSeam";
 import RememberSection from "@/components/Remembersection";
 
 export default function Home() {
@@ -25,6 +26,7 @@ export default function Home() {
           <FilmsSection2 />
           <AwardsSection />
           <PartnersSection />
+          <PaperBurnSeam />
           <RememberSection />
         </main>
         <Footer />

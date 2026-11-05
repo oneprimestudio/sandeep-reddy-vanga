@@ -7,7 +7,7 @@
  *  2. Load     red emulsion rises inside the frame as REAL assets load (000 → 100)
  *  3. Gate     timeline pauses until loading is finished
  *  4. Land     text rolls out, the frame travels + resizes onto the hero portrait
- *              ([data-hero-portrait]), the red burns away to reveal the real portrait
+ *              ([data-hero-portrait]), the red burns away SLOWLY to reveal the real portrait
  *  5. Handoff  "preloader:land" fires → hero intro starts → the white paper dissolves away
  *
  * Hero protocol (matches HeroSection):
@@ -141,17 +141,18 @@ void main() {
   film += smoothstep(0.995, 1.0, noise(fp * 60.0 + floor(uTime * 12.0) * 17.0)) * 0.25; // dust
 
   // frame contents burn away to reveal the real portrait underneath
+  // (softer, wider burn edge so the slow reveal looks organic, not harsh)
   float n2 = fbm(fp * 2.5 + 7.0);
-  float t = mix(-0.12, 1.12, uReveal);
-  float aFrame = smoothstep(t, t + 0.05, n2);
-  float rim = (1.0 - smoothstep(0.0, 0.05, n2 - t)) * step(0.001, uReveal) * step(t, n2);
+  float t = mix(-0.14, 1.14, uReveal);
+  float aFrame = smoothstep(t, t + 0.09, n2);
+  float rim = (1.0 - smoothstep(0.0, 0.09, n2 - t)) * step(0.001, uReveal) * step(t, n2);
   film = mix(film, vec3(1.0, 0.82, 0.7), rim * 0.8);
 
   /* ── paper dissolves into the page ── */
   float n3 = fbm(p * 3.2 + 11.0);
-  float t2 = mix(-0.12, 1.12, uClear);
-  float aPaper = smoothstep(t2, t2 + 0.06, n3);
-  float rim2 = (1.0 - smoothstep(0.0, 0.05, n3 - t2)) * step(0.001, uClear) * step(t2, n3);
+  float t2 = mix(-0.14, 1.14, uClear);
+  float aPaper = smoothstep(t2, t2 + 0.1, n3);
+  float rim2 = (1.0 - smoothstep(0.0, 0.1, n3 - t2)) * step(0.001, uClear) * step(t2, n3);
   paper = mix(paper, vec3(0.96, 0.5, 0.38), rim2 * 0.55);
 
   vec3 col = mix(paper, film, m);
@@ -179,7 +180,7 @@ type Props = {
 
 export default function Preloader({
   assets = [],
-  minDuration = 2.8,
+  minDuration = 1.2,
   oncePerSession = false,
   onComplete,
 }: Props) {
@@ -238,6 +239,8 @@ export default function Preloader({
         gsap.ticker.remove(tick);
         disposeGL();
         root.style.display = "none";
+        root.style.visibility = "hidden";
+        root.style.pointerEvents = "none";
         html.style.overflow = "";
         html.dataset.preload = "done";
         html.dataset.preloaded = "1";
@@ -336,6 +339,11 @@ export default function Preloader({
         renderer.setClearColor(0x000000, 0);
         resize();
         window.addEventListener("resize", resize);
+
+        canvas.addEventListener("webglcontextlost", (e) => {
+          e.preventDefault();
+          finish();
+        });
       }
 
       disposeGL = () => {
@@ -393,7 +401,7 @@ export default function Preloader({
       else bump();
       if (document.readyState === "complete") bump();
       else window.addEventListener("load", bump, { once: true });
-      const safety = window.setTimeout(() => (prog.real = 1), 12000); // never hang
+      const safety = window.setTimeout(finish, 3500); // guarantees preloader never hangs screen!
 
       /* ── caption roll (masked, same language as the rest of the site) ── */
       let lineIdx = 0;
@@ -441,23 +449,27 @@ export default function Preloader({
           if (ready) gsap.delayedCall(0, go);
         })
         .addLabel("outro")
-        // 3) text rolls out
-        .to(items, { yPercent: -110, duration: 0.55, ease: "expo.in", stagger: 0.025 }, "outro+=0.4");
+        // 3) text rolls out (slightly softer)
+        .to(
+          items,
+          { yPercent: -110, duration: 0.8, ease: "expo.in", stagger: 0.035 },
+          "outro+=0.4"
+        );
 
       if (renderer) {
-        // 4) LAND: frame travels onto the hero portrait, contents burn away
-        tl.call(measureTarget, [], "outro+=0.55")
-          .to(gl, { land: 1, duration: 1.4, ease: "expo.inOut" }, "outro+=0.6")
-          .to(gl, { reveal: 1, duration: 0.9, ease: "power2.inOut" }, "outro+=1.5")
-          // 5) HANDOFF: hero starts, paper dissolves underneath its entrance
-          .call(announceLand, [], "outro+=2.2")
-          .to(gl, { clear: 1, duration: 1, ease: "power2.inOut" }, "outro+=2.25");
+        // 4) LAND: frame travels onto the hero portrait (1.2s)
+        tl.call(measureTarget, [], "outro+=0.4")
+          .to(gl, { land: 1, duration: 1.2, ease: "power3.inOut" }, "outro+=0.45")
+          // REVEAL: red burn → real portrait (1.4s)
+          .to(gl, { reveal: 1, duration: 1.4, ease: "power1.inOut" }, "outro+=1.2")
+          // 5) HANDOFF: hero starts once burn is underway, paper dissolves
+          .call(announceLand, [], "outro+=2.0")
+          .to(gl, { clear: 1, duration: 1.2, ease: "power2.inOut" }, "outro+=2.1")
+          .call(finish, [], "outro+=3.35");
       } else {
-        tl.call(announceLand, [], "outro+=0.8").to(
-          root,
-          { autoAlpha: 0, duration: 0.9, ease: "power2.inOut" },
-          "outro+=0.8"
-        );
+        tl.call(announceLand, [], "outro+=0.5")
+          .to(root, { autoAlpha: 0, duration: 0.8, ease: "power2.inOut" }, "outro+=0.5")
+          .call(finish, [], "outro+=1.35");
       }
 
       /* ── per-frame loop: progress, counter, timecode, shader ── */
@@ -466,45 +478,54 @@ export default function Preloader({
       let painted = false;
 
       tick = (_t, dtMs) => {
-        const dt = Math.min(dtMs, 64) / 1000;
-        elapsed += dt;
+        try {
+          const dt = Math.min(dtMs, 64) / 1000;
+          elapsed += dt;
 
-        const target = Math.min(prog.real, elapsed / minDuration);
-        prog.disp += (target - prog.disp) * Math.min(1, dt * 5);
-        if (target >= 1 && prog.disp > 0.997) prog.disp = 1;
+          const target = Math.min(prog.real, elapsed / minDuration);
+          prog.disp += (target - prog.disp) * Math.min(1, dt * 5);
+          if (target >= 1 && prog.disp > 0.997) prog.disp = 1;
 
-        const pct = Math.round(prog.disp * 100);
-        if (pct !== lastPct) {
-          lastPct = pct;
-          if (countRef.current) countRef.current.textContent = pad(pct, 3);
-          narrate(prog.disp);
-        }
-
-        if (tcRef.current) {
-          const fr = Math.floor(elapsed * 24);
-          tcRef.current.textContent = `00:${pad(Math.floor(elapsed / 60))}:${pad(
-            Math.floor(elapsed) % 60
-          )}:${pad(fr % 24)}`;
-        }
-
-        if (!ready && prog.disp >= 1) {
-          ready = true;
-          if (atGate) gsap.delayedCall(0, go);
-        }
-
-        if (renderer) {
-          uniforms.uTime.value = elapsed;
-          uniforms.uIntro.value = gl.intro;
-          uniforms.uWidth.value = gl.width;
-          uniforms.uProg.value = prog.disp;
-          uniforms.uLand.value = gl.land;
-          uniforms.uReveal.value = gl.reveal;
-          uniforms.uClear.value = gl.clear;
-          renderer.render(scene, cam);
-          if (!painted) {
-            painted = true;
-            root.style.backgroundColor = "transparent"; // canvas now provides the white paper
+          const pct = Math.round(prog.disp * 100);
+          if (pct !== lastPct) {
+            lastPct = pct;
+            if (countRef.current) countRef.current.textContent = pad(pct, 3);
+            narrate(prog.disp);
           }
+
+          if (tcRef.current) {
+            const fr = Math.floor(elapsed * 24);
+            tcRef.current.textContent = `00:${pad(Math.floor(elapsed / 60))}:${pad(
+              Math.floor(elapsed) % 60
+            )}:${pad(fr % 24)}`;
+          }
+
+          if (!ready && prog.disp >= 1) {
+            ready = true;
+            if (atGate) gsap.delayedCall(0, go);
+          }
+
+          if (renderer) {
+            uniforms.uTime.value = elapsed;
+            uniforms.uIntro.value = gl.intro;
+            uniforms.uWidth.value = gl.width;
+            uniforms.uProg.value = prog.disp;
+            uniforms.uLand.value = gl.land;
+            uniforms.uReveal.value = gl.reveal;
+            uniforms.uClear.value = gl.clear;
+            try {
+              renderer.render(scene, cam);
+            } catch {
+              finish();
+              return;
+            }
+            if (!painted) {
+              painted = true;
+              root.style.backgroundColor = "transparent";
+            }
+          }
+        } catch {
+          finish();
         }
       };
 

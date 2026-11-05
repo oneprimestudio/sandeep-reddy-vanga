@@ -25,8 +25,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={vangaFont.variable}>
-      <body className="min-h-screen antialiased bg-white text-[#111116] selection:bg-[#d92626] selection:text-white">
+    <html lang="en" className={vangaFont.variable} suppressHydrationWarning>
+      <body
+        suppressHydrationWarning
+        className="min-h-screen antialiased bg-white text-[#111116] selection:bg-[#d92626] selection:text-white"
+      >
         <Preloader oncePerSession assets={FILMS.map((f) => f.src)} />
         <SmoothScroll>
           <NoiseOverlay
