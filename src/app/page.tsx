@@ -26,7 +26,6 @@ export default function Home() {
           <FilmsSection2 />
           <AwardsSection />
           <PartnersSection />
-          <PaperBurnSeam />
           <RememberSection />
         </main>
         <Footer />

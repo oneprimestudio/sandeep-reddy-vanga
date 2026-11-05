@@ -25,21 +25,24 @@ export default function HeroSection() {
     }
   };
 
-  // false while the preloader is on screen; the hero starts its intro when it lands
-  const [go, setGo] = useState(() =>
-    typeof document === "undefined" ? false : !document.getElementById("preloader")
-  );
+  // true by default; only waits if an active preloader element is present in DOM
+  const [go, setGo] = useState(true);
   useEffect(() => {
-    if (go) return;
+    const el = document.getElementById("preloader");
+    if (!el) {
+      setGo(true);
+      return;
+    }
     const flag = document.documentElement.dataset.preload;
     if (flag === "landed" || flag === "done") {
       setGo(true);
       return;
     }
+    setGo(false);
     const on = () => setGo(true);
     window.addEventListener("preloader:land", on, { once: true });
     return () => window.removeEventListener("preloader:land", on);
-  }, [go]);
+  }, []);
 
   // PARALLAX: always on, so the portrait is already at its scroll-0 position when the
   // preloader measures it
@@ -258,6 +261,7 @@ export default function HeroSection() {
                       alt="Sandeep Reddy Vanga"
                       fill
                       priority
+                      loading="eager"
                       sizes="(min-width: 768px) 33vw, 62vw"
                       className="object-cover object-center"
                     />
