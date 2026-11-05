@@ -1,0 +1,245 @@
+@import "tailwindcss";
+@font-face {
+    font-family: "vanga";
+    src: url("/fonts/Vanga.woff2") format("woff2"), url("/fonts/vanga.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+
+/* Explicit optical weight rendering for custom single-master font (vanga) */
+
+.font-medium,
+[class*="font-medium"],
+.font-medium>*,
+[class*="font-medium"]>* {
+    font-weight: 500 !important;
+    -webkit-text-stroke: 0.32px currentColor;
+    paint-order: stroke fill;
+    text-shadow: 0 0 0.15px currentColor;
+}
+
+.font-semibold,
+[class*="font-semibold"],
+.font-semibold>*,
+[class*="font-semibold"]>* {
+    font-weight: 600 !important;
+    -webkit-text-stroke: 0.5px currentColor;
+    paint-order: stroke fill;
+    text-shadow: 0 0 0.25px currentColor;
+}
+
+.font-bold,
+[class*="font-bold"],
+.font-bold>*,
+[class*="font-bold"]>* {
+    font-weight: 700 !important;
+    -webkit-text-stroke: 0.72px currentColor;
+    paint-order: stroke fill;
+    text-shadow: 0 0 0.35px currentColor;
+}
+
+@theme {
+    --color-canvas: #ffffff;
+    --color-canvas-subtle: #f7f7f8;
+    --color-ink: #111116;
+    --color-ink-muted: #575a61;
+    --color-vanga-red: #d92626;
+}
+
+@theme inline {
+    --font-vanga: "vanga", var(--font-vanga-local), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --ease-prime: cubic-bezier(0.87, 0, 0.13, 1);
+    --ease-mask: cubic-bezier(0.33, 0, 0.1, 1);
+}
+
+:root {
+    --margin: 20px;
+    --gutter: 10px;
+    --nav-h: 84px;
+    /* measure your real navbar height and tune this */
+}
+
+.vanga-label {
+    font-size: 12px;
+    line-height: 0.9;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+}
+
+@media (min-width: 768px) {
+     :root {
+        --gutter: 40px;
+        --nav-top: 24px;
+        --nav-h: 40px;
+    }
+}
+
+html {
+    background: #ffffff;
+    color: #111116;
+    font-family: var(--font-vanga);
+    overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scrollbar-gutter: stable;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+body {
+    background: #ffffff;
+    font-family: var(--font-vanga);
+    font-synthesis: weight style;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    color: #111116;
+}
+
+
+/* User typography hierarchy specification:
+   Labels: 16px desktop, 12px mobile
+   h1: 40px desktop, 32px mobile
+   h2: 32px desktop, 18px mobile
+*/
+
+.vanga-label {
+    font-size: 12px;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+}
+
+@media (min-width: 768px) {
+    .vanga-label {
+        font-size: 16px;
+        line-height: 1.35;
+        letter-spacing: -0.01em;
+    }
+}
+
+.vanga-h1 {
+    font-size: 32px;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    font-weight: 500;
+}
+
+@media (min-width: 768px) {
+    .vanga-h1 {
+        font-size: 40px;
+        line-height: 1.08;
+        letter-spacing: -0.035em;
+    }
+}
+
+.vanga-h2 {
+    font-size: 18px;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    font-weight: 500;
+}
+
+@media (min-width: 768px) {
+    .vanga-h2 {
+        font-size: 32px;
+        line-height: 1.15;
+        letter-spacing: -0.03em;
+    }
+}
+
+
+/* SplitText line masking utility classes */
+
+.split-line-mask {
+    overflow: hidden;
+    display: block;
+}
+
+.line {
+    display: block;
+    will-change: transform, opacity;
+}
+
+::selection {
+    background: #d92626;
+    color: #ffffff;
+}
+
+.t-display {
+    font-size: clamp(30px, 4.4vw, 72px);
+    line-height: 0.92;
+    letter-spacing: -0.045em;
+    text-transform: uppercase;
+    font-weight: 400;
+}
+
+.t-lead {
+    font-size: clamp(20px, 1.9vw, 30px);
+    line-height: 1.08;
+    letter-spacing: -0.04em;
+    font-weight: 400;
+}
+
+.t-body {
+    font-size: clamp(12px, 0.9vw, 14px);
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+}
+
+.t-label {
+    font-size: 12px;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+}
+
+.t-micro {
+    font-size: 10px;
+    line-height: 1.1;
+    text-transform: uppercase;
+}
+
+.t-title {
+    font-size: clamp(16px, 1.45vw, 24px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    word-spacing: 0.25em;
+    /* Figma lo unna wide word gaps */
+    text-transform: uppercase;
+    font-weight: 400;
+}
+
+@keyframes scanline {
+    0% {
+        top: -5%;
+        opacity: 0;
+    }
+    20% {
+        opacity: 0.85;
+    }
+    80% {
+        opacity: 0.85;
+    }
+    100% {
+        top: 105%;
+        opacity: 0;
+    }
+}
+
+
+/* Preloader safety: ensure #preloader never blocks the screen once landed or done */
+
+html[data-preload="landed"] #preloader,
+html[data-preload="done"] #preloader {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+    transition: opacity 0.5s ease;
+}
