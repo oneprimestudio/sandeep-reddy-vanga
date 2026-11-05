@@ -25,8 +25,13 @@ export default function HeroSection() {
     }
   };
 
-  // true by default; only waits if an active preloader element is present in DOM
-  const [go, setGo] = useState(true);
+  const [go, setGo] = useState(() => {
+    if (typeof document === "undefined") return false;
+    const el = document.getElementById("preloader");
+    if (!el) return true;
+    const flag = document.documentElement.dataset.preload;
+    return flag === "landed" || flag === "done";
+  });
   useEffect(() => {
     const el = document.getElementById("preloader");
     if (!el) {

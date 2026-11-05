@@ -30,6 +30,7 @@ export default function RootLayout({
         suppressHydrationWarning
         className="min-h-screen antialiased bg-white text-[#111116] selection:bg-[#d92626] selection:text-white"
       >
+        <Preloader assets={FILMS.map((f) => f.src)} />
         <SmoothScroll>
           <NoiseOverlay
             intensity={0.09}

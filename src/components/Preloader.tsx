@@ -401,7 +401,7 @@ export default function Preloader({
       else bump();
       if (document.readyState === "complete") bump();
       else window.addEventListener("load", bump, { once: true });
-      const safety = window.setTimeout(finish, 3500); // guarantees preloader never hangs screen!
+      const safety = window.setTimeout(finish, 7500); // safety fallback ensures preloader never hangs if an asset is blocked
 
       /* ── caption roll (masked, same language as the rest of the site) ── */
       let lineIdx = 0;
