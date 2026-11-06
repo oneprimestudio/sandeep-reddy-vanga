@@ -1,10 +1,14 @@
+
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Analytics } from "@vercel/analytics/next";
+
 import SmoothScroll from "@/components/SmoothScroll";
 import NoiseOverlay from "@/components/NoiseOverlay";
-import "./globals.css";
 import Preloader from "@/components/Preloader";
 import { FILMS } from "@/data/films";
+
+import "./globals.css";
 
 const vangaFont = localFont({
   src: "../fonts/vanga.woff2",
@@ -25,12 +29,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={vangaFont.variable} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={vangaFont.variable}
+      suppressHydrationWarning
+    >
       <body
         suppressHydrationWarning
         className="min-h-screen antialiased bg-white text-[#111116] selection:bg-[#d92626] selection:text-white"
       >
         <Preloader assets={FILMS.map((f) => f.src)} />
+
         <SmoothScroll>
           <NoiseOverlay
             intensity={0.09}
@@ -39,6 +48,8 @@ export default function RootLayout({
           />
           {children}
         </SmoothScroll>
+
+        <Analytics />
       </body>
     </html>
   );
