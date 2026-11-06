@@ -10,6 +10,21 @@ import { Rec, Timecode, LocalTime, ScrollCue, Narration } from "./HeroMicro";
 const MASK_FROM = "inset(30% 30% 30% 30% round 24px)";
 const MASK_TO = "inset(0% 0% 0% 0% round 0px)";
 
+/**
+ * Preloader phases (html[data-preload]):
+ *   loading → landed (frame on portrait) → clearing (paper burning) → done
+ * portrait : can settle once the frame has landed
+ * text     : page text waits until the paper burn starts, so it animates in sync with it
+ */
+function readPhase() {
+  if (typeof document === "undefined") return { portrait: false, text: false };
+  const pre = document.getElementById("preloader");
+  const f = document.documentElement.dataset.preload;
+  if (!pre || f === "done" || f === "clearing") return { portrait: true, text: true };
+  if (f === "landed") return { portrait: true, text: false };
+  return { portrait: false, text: false };
+}
+
 export default function HeroSection() {
   const rootRef = useRef<HTMLElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -25,28 +40,26 @@ export default function HeroSection() {
     }
   };
 
-  const [go, setGo] = useState(() => {
-    if (typeof document === "undefined") return false;
-    const el = document.getElementById("preloader");
-    if (!el) return true;
-    const flag = document.documentElement.dataset.preload;
-    return flag === "landed" || flag === "done";
-  });
+  const [portraitGo, setPortraitGo] = useState(() => readPhase().portrait);
+  const [textGo, setTextGo] = useState(() => readPhase().text);
+
   useEffect(() => {
-    const el = document.getElementById("preloader");
-    if (!el) {
-      setGo(true);
-      return;
-    }
-    const flag = document.documentElement.dataset.preload;
-    if (flag === "landed" || flag === "done") {
-      setGo(true);
-      return;
-    }
-    setGo(false);
-    const on = () => setGo(true);
-    window.addEventListener("preloader:land", on, { once: true });
-    return () => window.removeEventListener("preloader:land", on);
+    const p = readPhase();
+    setPortraitGo(p.portrait);
+    setTextGo(p.text);
+    if (p.text) return;
+
+    const onLand = () => setPortraitGo(true);
+    const onClear = () => {
+      setPortraitGo(true);
+      setTextGo(true);
+    };
+    window.addEventListener("preloader:land", onLand, { once: true });
+    window.addEventListener("preloader:clear", onClear, { once: true });
+    return () => {
+      window.removeEventListener("preloader:land", onLand);
+      window.removeEventListener("preloader:clear", onClear);
+    };
   }, []);
 
   // PARALLAX: always on, so the portrait is already at its scroll-0 position when the
@@ -75,29 +88,42 @@ export default function HeroSection() {
     { scope: rootRef }
   );
 
-  // INTRO: waits for the preloader. After a seamless landing the portrait is already in place.
+  // before the burn reveals it, the image sits slightly zoomed (hidden behind the red frame)
   useGSAP(
     () => {
-      if (!go) return;
+      const pre = document.getElementById("preloader");
+      const f = document.documentElement.dataset.preload;
+      if (pre && f !== "done" && settleRef.current) {
+        gsap.set(settleRef.current, { scale: 1.14 });
+      }
+    },
+    { scope: rootRef }
+  );
+
+  // INTRO: waits for the frame to land. Portrait is already in place, it only settles.
+  useGSAP(
+    () => {
+      if (!portraitGo) return;
       const card = cardRef.current;
       const mask = maskRef.current;
       const settle = settleRef.current;
       if (!card || !mask || !settle) return;
 
+      const phase = document.documentElement.dataset.preload ?? "";
       const fromPreloader =
-        document.documentElement.dataset.preload === "landed" ||
-        document.documentElement.dataset.preload === "done" ||
+        ["landed", "clearing", "done"].includes(phase) ||
         document.documentElement.dataset.preloaded === "1";
 
       if (fromPreloader) {
         gsap.set(mask, { clipPath: MASK_TO });
-        gsap.set(settle, { scale: 1 });
+        // slow settle that runs together with the burn reveal
+        gsap.to(settle, { scale: 1, duration: 2.4, ease: "expo.out" });
         gsap.from("[data-hero-name]", {
           opacity: 0,
-          y: 12,
-          duration: 1.0,
+          y: 14,
+          duration: 1.1,
           ease: "expo.out",
-          delay: 0.1,
+          delay: 0.6,
           stagger: 0.08,
         });
         return;
@@ -119,12 +145,12 @@ export default function HeroSection() {
         )
         .from(settle, { scale: 1.15, duration: 1.6, ease: "expo.out" }, 0);
     },
-    { scope: rootRef, dependencies: [go] }
+    { scope: rootRef, dependencies: [portraitGo] }
   );
 
-  // the <Text> blocks re-mount at landing so their entrances play after the preloader
-  // (the portrait is never re-mounted)
-  const k = go ? "in" : "pre";
+  // the <Text> blocks re-mount when the paper starts burning, so their entrances play in sync
+  // with it (the portrait is never re-mounted)
+  const k = textGo ? "in" : "pre";
 
   return (
     <section

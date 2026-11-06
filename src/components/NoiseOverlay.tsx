@@ -12,42 +12,10 @@ type Props = {
   className?: string;
 };
 
-const VERT = /* glsl */ `
-  void main() {
-    gl_Position = vec4(position.xy, 0.0, 1.0);
-  }
-`;
-
-const FRAG = /* glsl */ `
-  uniform float uFrame;
-  uniform float uIntensity;
-
-  float hash13(vec3 p3) {
-    p3 = fract(p3 * 0.1031);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
-  }
-
-  void main() {
-    vec2 pixel = floor(gl_FragCoord.xy);
-    float frame = mod(uFrame, 997.0);
-
-    float a = hash13(vec3(pixel, frame));
-    float b = hash13(vec3(pixel + 17.17, frame + 31.7));
-    float c = hash13(vec3(pixel.yx + 53.9, frame + 71.3));
-    float noise = (a + b + c - 1.5) * 0.6666667;
-
-    float alpha = abs(noise) * uIntensity;
-    vec3 grainColor = noise >= 0.0 ? vec3(1.0) : vec3(0.0);
-    gl_FragColor = vec4(grainColor, alpha);
-    #include <colorspace_fragment>
-  }
-`;
-
 export default function NoiseOverlay({
-  intensity = 0.035,
-  grain = 0.8,
-  fps = 18,
+  intensity = 0.04,
+  grain = 1,
+  fps = 24,
   className = "",
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -58,121 +26,99 @@ export default function NoiseOverlay({
   }, [intensity, grain, fps]);
 
   useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d", { alpha: true });
+    if (!ctx) return;
+
     let disposed = false;
-    let raf = 0;
-    let resizeObserver: ResizeObserver | null = null;
-    let renderer: import("three").WebGLRenderer | null = null;
-    let geometry: import("three").PlaneGeometry | null = null;
-    let material: import("three").ShaderMaterial | null = null;
-    let resizeHandler = () => {};
+    let animId = 0;
+    let lastTime = 0;
 
-    (async () => {
-      const THREE = await import("three");
-      const canvas = canvasRef.current;
-      if (disposed || !canvas) return;
+    // Generate a set of pre-baked noise tiles for zero-cost 60fps/24fps playback
+    const TILE_SIZE = 128;
+    const NUM_TILES = 8;
+    const tiles: HTMLCanvasElement[] = [];
 
-      try {
-        renderer = new THREE.WebGLRenderer({
-          canvas,
-          alpha: true,
-          antialias: false,
-          powerPreference: "low-power",
-          premultipliedAlpha: true,
-          preserveDrawingBuffer: false,
-        });
-      } catch {
-        return;
+    for (let t = 0; t < NUM_TILES; t++) {
+      const tile = document.createElement("canvas");
+      tile.width = TILE_SIZE;
+      tile.height = TILE_SIZE;
+      const tCtx = tile.getContext("2d");
+      if (tCtx) {
+        const imgData = tCtx.createImageData(TILE_SIZE, TILE_SIZE);
+        const buf = new Uint32Array(imgData.data.buffer);
+        const len = buf.length;
+        for (let i = 0; i < len; i++) {
+          // Subtle monochromatic grain
+          const val = (Math.random() * 255) | 0;
+          const alpha = (Math.random() * 255) | 0;
+          // ABGR order for Little-Endian Uint32
+          buf[i] = (alpha << 24) | (val << 16) | (val << 8) | val;
+        }
+        tCtx.putImageData(imgData, 0, 0);
+      }
+      tiles.push(tile);
+    }
+
+    let width = 0;
+    let height = 0;
+
+    const resize = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      width = w;
+      height = h;
+      canvas.width = w;
+      canvas.height = h;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+    };
+
+    resize();
+    window.addEventListener("resize", resize, { passive: true });
+
+    let currentTile = 0;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const render = (time: number) => {
+      if (disposed) return;
+      animId = requestAnimationFrame(render);
+
+      const targetFps = Math.max(1, Math.min(30, settingsRef.current.fps));
+      const interval = 1000 / targetFps;
+
+      if (time - lastTime < interval) return;
+      lastTime = time;
+
+      if (!reducedMotion) {
+        currentTile = (currentTile + 1) % NUM_TILES;
       }
 
-      const scene = new THREE.Scene();
-      const camera = new THREE.Camera();
-      geometry = new THREE.PlaneGeometry(2, 2);
-      material = new THREE.ShaderMaterial({
-        uniforms: {
-          uFrame: { value: 0 },
-          uIntensity: { value: settingsRef.current.intensity },
-        },
-        vertexShader: VERT,
-        fragmentShader: FRAG,
-        transparent: true,
-        blending: THREE.NormalBlending,
-        depthTest: false,
-        depthWrite: false,
-        toneMapped: false,
-      });
+      ctx.clearRect(0, 0, width, height);
 
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.frustumCulled = false;
-      scene.add(mesh);
+      const tile = tiles[currentTile];
+      if (!tile) return;
 
-      renderer.setClearColor(0x000000, 0);
-      renderer.setPixelRatio(1);
+      ctx.save();
+      ctx.globalAlpha = settingsRef.current.intensity;
+      ctx.globalCompositeOperation = "source-over";
 
-      let frame = 0;
-      let last = 0;
-      let lastWidth = 0;
-      let lastHeight = 0;
-      const reducedMotion = window.matchMedia(
-        "(prefers-reduced-motion: reduce)"
-      ).matches;
-
-      const draw = () => {
-        if (!renderer || !material) return;
-        material.uniforms.uFrame.value = frame;
-        material.uniforms.uIntensity.value = settingsRef.current.intensity;
-        renderer.render(scene, camera);
-      };
-
-      const resize = () => {
-        if (!renderer) return;
-        const { grain: cell } = settingsRef.current;
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const width = Math.max(1, Math.ceil(window.innerWidth * dpr / Math.max(0.5, cell)));
-        const height = Math.max(1, Math.ceil(window.innerHeight * dpr / Math.max(0.5, cell)));
-
-        if (width === lastWidth && height === lastHeight) return;
-        lastWidth = width;
-        lastHeight = height;
-        renderer.setSize(width, height, false);
-        draw();
-      };
-
-      resizeHandler = resize;
-      window.addEventListener("resize", resize, { passive: true });
-      resize();
-
-      if ("ResizeObserver" in window && canvas.parentElement) {
-        resizeObserver = new ResizeObserver(resize);
-        resizeObserver.observe(canvas.parentElement);
+      const pattern = ctx.createPattern(tile, "repeat");
+      if (pattern) {
+        ctx.fillStyle = pattern;
+        ctx.fillRect(0, 0, width, height);
       }
+      ctx.restore();
+    };
 
-      const loop = (time: number) => {
-        raf = requestAnimationFrame(loop);
-        const currentFps = settingsRef.current.fps;
-        if (reducedMotion || currentFps <= 0) return;
-
-        const interval = 1000 / Math.min(30, Math.max(1, currentFps));
-        if (time - last < interval) return;
-        last = time - ((time - last) % interval);
-        frame += 1;
-        draw();
-      };
-
-      if (!reducedMotion && settingsRef.current.fps > 0) {
-        raf = requestAnimationFrame(loop);
-      } else {
-        draw();
-      }
-    })();
+    animId = requestAnimationFrame(render);
 
     return () => {
       disposed = true;
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", resizeHandler);
-      resizeObserver?.disconnect();
-      geometry?.dispose();
-      material?.dispose();
-      renderer?.dispose();
+      cancelAnimationFrame(animId);
+      window.removeEventListener("resize", resize);
     };
   }, []);
 

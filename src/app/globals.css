@@ -234,12 +234,20 @@ body {
 }
 
 
-/* Preloader safety: ensure #preloader never blocks the screen once landed or done */
+/* Preloader safety: ensure #preloader never blocks the screen once DONE.
+   The "landed" and "clearing" phases are still active (burn reveal + paper dissolve),
+   so do NOT hide the preloader until the full sequence completes ("done"). */
 
-html[data-preload="landed"] #preloader,
 html[data-preload="done"] #preloader {
     opacity: 0 !important;
     pointer-events: none !important;
     visibility: hidden !important;
-    transition: opacity 0.5s ease;
+    transition: opacity 0.3s ease;
+}
+
+/* While "landed" or "clearing", the preloader is still animating but should not
+   block clicks on elements underneath that are already visible through the burn holes */
+html[data-preload="landed"] #preloader,
+html[data-preload="clearing"] #preloader {
+    pointer-events: none;
 }

@@ -7,15 +7,17 @@
  *              (sprocket holes scroll past the frame as the film "runs")
  *  2. Load     red emulsion rises inside the frame as REAL assets load (000 → 100)
  *  3. Gate     timeline pauses until loading is finished, then holds a beat on 100
- *  4. Land     text rolls out, the frame travels + resizes onto the hero portrait
- *              ([data-hero-portrait], re-measured every frame while travelling),
- *              the red BURNS away (char → ember rim → glow → sparks) to reveal the real portrait
- *  5. Handoff  "preloader:land" fires → hero intro starts → the white paper burns away too
+ *  4. Land     text rolls out, the frame travels (size leads, small arc) onto the hero portrait
+ *              ([data-hero-portrait], re-measured every frame until the end)
+ *  5. Reveal   AFTER landing, the red burns away bottom → top to reveal the real portrait
+ *  6. Handoff  "preloader:land"  → portrait settles + names fade in
+ *              "preloader:clear" → paper burns away, hero text animates in sync with it
  *
  * Hero protocol (matches HeroSection):
  *   #preloader                        root element
- *   html[data-preload]                "loading" → "landed" → "done"
- *   window "preloader:land"           frame is on the portrait, hero can start
+ *   html[data-preload]                "loading" → "landed" → "clearing" → "done"
+ *   window "preloader:land"           frame is on the portrait, portrait can settle
+ *   window "preloader:clear"          paper burn starts, page text can animate
  *   window "preloader:done"           everything finished
  *   html[data-preloaded="1"]          legacy flag, set at the end
  */
@@ -141,13 +143,18 @@ void main() {
   p.y += sin(uTime * 41.0) * 0.0007 * calm;
   p.x += (hash(vec2(floor(uTime * 24.0), 3.0)) - 0.5) * 0.0012 * calm;
 
+  // travel easing: position follows linearly, size leads, tiny lift arc (0 at both ends)
+  float lp   = uLand;
+  float ls   = 1.0 - (1.0 - uLand) * (1.0 - uLand);
+  float lift = sin(3.14159265 * uLand) * 0.012 * (1.0 - uReveal);
+
   // frame: 5:7 slit while loading → portrait rect when landed
   float hh0 = mix(0.15, 0.2, uProg) * uIntro;
   hh0 *= 1.0 + 0.006 * sin(uTime * 2.2) * uWidth * calm;   // the frame "breathes" at the gate
   hh0 = min(hh0, asp * 0.4);                                // never wider than the phone screen
   vec2 half0 = vec2(hh0 * (5.0 / 7.0) * mix(0.012, 1.0, uWidth), hh0);
-  vec2 hs = mix(half0, uToHalf, uLand);
-  vec2 c = mix(vec2(0.0), uToCenter, uLand);
+  vec2 hs = mix(half0, uToHalf, ls);
+  vec2 c = mix(vec2(0.0), uToCenter, lp) + vec2(0.0, lift);
   vec2 q = p - c;
 
   float d = box(q, hs);
@@ -201,9 +208,9 @@ void main() {
   /* ── burns ── */
   float gF, gP;
 
-  // frame contents burn away → real portrait underneath
-  float n2 = fbm(fp * 2.5 + 7.0);
-  float tF = mix(-0.14, 1.14, uReveal);
+  // frame contents burn away BOTTOM → TOP (matches the emulsion that rose from the bottom)
+  float n2 = fbm(fp * 2.5 + 7.0) + (y01 - 0.5) * 0.5;
+  float tF = mix(-0.4, 1.4, uReveal);
   vec4 F = burnLayer(clamp(film, 0.0, 1.0), n2, tF, 0.09, gF);
 
   // paper burns away → the page
@@ -271,7 +278,7 @@ export default function Preloader({
       let pollTries = 0;
       function poll() {
         const o = names[0] ? parseFloat(getComputedStyle(names[0]).opacity) : 0;
-        if (o < 0.98 || ++pollTries > 120) freeNames();
+        if (o < 0.98 || ++pollTries > 180) freeNames();
       }
       function freeNames() {
         if (namesFree) return;
@@ -280,6 +287,7 @@ export default function Preloader({
         gsap.ticker.remove(poll);
       }
 
+      /* ── phase announcements ── */
       let landed = false;
       const announceLand = () => {
         if (landed) return;
@@ -289,14 +297,27 @@ export default function Preloader({
         gsap.ticker.add(poll); // free the names as soon as the hero starts animating them
       };
 
+      let cleared = false;
+      const announceClear = () => {
+        if (cleared) return;
+        cleared = true;
+        html.dataset.preload = "clearing";
+        window.dispatchEvent(new Event("preloader:clear"));
+      };
+
       let finished = false;
       let disposeGL = () => {};
       let tick: (t: number, dt: number) => void = () => {};
+      let safety = 0;
+      let hardStop = 0;
 
       const finish = () => {
         if (finished) return;
         finished = true;
+        window.clearTimeout(safety);
+        window.clearTimeout(hardStop);
         announceLand();
+        announceClear();
         gsap.ticker.remove(tick);
         disposeGL();
         root.style.display = "none";
@@ -334,6 +355,7 @@ export default function Preloader({
       // reduced motion → quiet fade, no WebGL
       if (reduced) {
         announceLand();
+        announceClear();
         gsap.to(root, { autoAlpha: 0, duration: 0.5, delay: 0.2, onComplete: finish });
         return () => {
           finish();
@@ -341,6 +363,8 @@ export default function Preloader({
         };
       }
 
+      // the browser must not restore an old scroll position: it would break the portrait measurement
+      if ("scrollRestoration" in history) history.scrollRestoration = "manual";
       html.style.overflow = "hidden";
       window.scrollTo(0, 0);
 
@@ -386,10 +410,13 @@ export default function Preloader({
       });
       scene.add(new THREE.Mesh(geo, mat));
 
+      // size comes from the canvas itself (not window.innerWidth) so it stays in sync
+      // with the measured portrait even when a scrollbar gutter exists
       const resize = () => {
         if (!renderer) return;
-        const w = window.innerWidth;
-        const h = window.innerHeight;
+        const cr = canvas.getBoundingClientRect();
+        const w = Math.max(1, cr.width);
+        const h = Math.max(1, cr.height);
         const pr = Math.min(window.devicePixelRatio || 1, 1.5);
         renderer.setPixelRatio(pr);
         renderer.setSize(w, h, false);
@@ -414,20 +441,21 @@ export default function Preloader({
         renderer?.dispose();
       };
 
-      /** where the frame has to land: the hero portrait's exact rect */
+      /** where the frame has to land: the hero portrait's exact rect (relative to the canvas) */
       const measureTarget = () => {
         const el = document.querySelector<HTMLElement>("[data-hero-portrait]");
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        if (!el) {
+        const cr = canvas.getBoundingClientRect();
+        const vw = cr.width;
+        const vh = cr.height;
+        if (!el || !vw || !vh) {
           uniforms.uToCenter.value.set(0, 0);
           uniforms.uToHalf.value.set(0.2 * (5 / 7), 0.2);
           return;
         }
         const r = el.getBoundingClientRect();
         uniforms.uToCenter.value.set(
-          ((r.left + r.width / 2) / vw - 0.5) * (vw / vh),
-          0.5 - (r.top + r.height / 2) / vh
+          ((r.left - cr.left + r.width / 2) / vw - 0.5) * (vw / vh),
+          0.5 - (r.top - cr.top + r.height / 2) / vh
         );
         uniforms.uToHalf.value.set(r.width / 2 / vh, r.height / 2 / vh);
       };
@@ -450,18 +478,33 @@ export default function Preloader({
         img.onerror = bump;
         img.src = src;
       });
+
+      // hero portrait counts as loaded only once it is DECODED (no flash when the burn reveals it)
+      const onHeroLoad = () => {
+        const img = heroImg;
+        if (!img) return;
+        if (typeof img.decode === "function") img.decode().then(bump, bump);
+        else bump();
+      };
       if (heroImg) {
-        if (heroImg.complete && heroImg.naturalWidth > 0) bump();
+        if (heroImg.complete && heroImg.naturalWidth > 0) onHeroLoad();
         else {
-          heroImg.addEventListener("load", bump, { once: true });
+          heroImg.addEventListener("load", onHeroLoad, { once: true });
           heroImg.addEventListener("error", bump, { once: true });
         }
       }
+
       if ((document as any).fonts?.ready) (document as any).fonts.ready.then(bump, bump);
       else bump();
       if (document.readyState === "complete") bump();
       else window.addEventListener("load", bump, { once: true });
-      const safety = window.setTimeout(finish, 9000); // safety fallback ensures preloader never hangs if an asset is blocked
+
+      // slow network: force the progress to complete (animation continues smoothly),
+      // and only hard-stop much later so a burn is never cut mid-way
+      safety = window.setTimeout(() => {
+        prog.real = 1;
+      }, 9000);
+      hardStop = window.setTimeout(finish, 16000);
 
       /* ── caption roll (masked, same language as the rest of the site) ── */
       let lineIdx = 0;
@@ -518,17 +561,20 @@ export default function Preloader({
         );
 
       if (renderer) {
-        // 4) LAND: frame travels onto the hero portrait
+        // 4) LAND: frame travels onto the hero portrait (ends at outro+1.85)
         tl.call(measureTarget, [], "outro+=0.4")
-          .to(gl, { land: 1, duration: 1.3, ease: "power3.inOut" }, "outro+=0.45")
-          // REVEAL: red burns away → real portrait (slow, with ember glow)
-          .to(gl, { reveal: 1, duration: 1.9, ease: "power1.inOut" }, "outro+=1.15")
-          // 5) HANDOFF: hero starts once burn is underway, paper burns away
-          .call(announceLand, [], "outro+=2.1")
-          .to(gl, { clear: 1, duration: 1.5, ease: "power2.inOut" }, "outro+=2.2")
-          .call(finish, [], "outro+=3.75");
+          .to(gl, { land: 1, duration: 1.4, ease: "power3.inOut" }, "outro+=0.45")
+          // 5) REVEAL: starts AFTER landing → red burns bottom → top, real portrait appears
+          .to(gl, { reveal: 1, duration: 2.2, ease: "power1.inOut" }, "outro+=1.75")
+          // portrait settles + names (hero listens to preloader:land)
+          .call(announceLand, [], "outro+=1.85")
+          // 6) HANDOFF: paper burns away, page text animates in sync (preloader:clear)
+          .call(announceClear, [], "outro+=2.6")
+          .to(gl, { clear: 1, duration: 1.5, ease: "power2.inOut" }, "outro+=2.6")
+          .call(finish, [], "outro+=4.2");
       } else {
         tl.call(announceLand, [], "outro+=0.5")
+          .call(announceClear, [], "outro+=0.6")
           .to(root, { autoAlpha: 0, duration: 0.8, ease: "power2.inOut" }, "outro+=0.5")
           .call(finish, [], "outro+=1.35");
       }
@@ -567,8 +613,9 @@ export default function Preloader({
           }
 
           if (renderer) {
-            // while travelling, keep tracking the portrait so it lands pixel-perfect
-            if (gl.land > 0 && gl.land < 1) measureTarget();
+            // from the first frame of travel until the very end, keep tracking the portrait
+            // so it stays pixel-perfect even if the hero layout shifts (Text remount, fonts)
+            if (gl.land > 0) measureTarget();
 
             uniforms.uTime.value = elapsed;
             uniforms.uIntro.value = gl.intro;
@@ -598,8 +645,9 @@ export default function Preloader({
 
       return () => {
         window.clearTimeout(safety);
+        window.clearTimeout(hardStop);
         window.removeEventListener("load", bump);
-        heroImg?.removeEventListener("load", bump);
+        heroImg?.removeEventListener("load", onHeroLoad);
         heroImg?.removeEventListener("error", bump);
         tl.kill();
         if (!finished) {
